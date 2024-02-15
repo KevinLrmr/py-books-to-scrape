@@ -3,11 +3,13 @@ from bs4 import BeautifulSoup
 import openpyxl
 import re as regex
 
-def preg_float(string):
-    return regex.search('([0-9]+(\\.?)[0-9]*)', string).group(0)
+def extract_float(string):
+    # Utilisation de regex non nécessaire pour extraire un float
+    return float(''.join(filter(str.isdigit, string)) + '.' + ''.join(filter(str.isdigit, string.split('.')[1])))
 
-def preg_int(string):
-    return regex.search('[0-9]+', string).group(0)
+def extract_int(string):
+    # Utilisation de regex non nécessaire pour extraire un entier
+    return int(''.join(filter(str.isdigit, string)))
 
 def get_book_infos(url, book_key) :
     
@@ -27,19 +29,13 @@ def get_book_infos(url, book_key) :
     ws[f'B{book_key}'] = html.find("th", string="UPC").findNext('td').get_text()
 
     # Price (excl. tax)
-    price_excluded_tax = html.find("th", string="Price (excl. tax)").findNext('td').get_text()
-    price_excluded_tax = preg_float(price_excluded_tax)
-    ws[f'D{book_key}'] =  float(price_excluded_tax)
+    ws[f'D{book_key}'] = extract_float(html.find("th", string="Price (excl. tax)").findNext('td').get_text())
 
     # Price (incl. tax)
-    price_including_tax = html.find("th", string="Price (incl. tax)").findNext('td').get_text()
-    price_including_tax = preg_float(price_including_tax)
-    ws[f'E{book_key}'] =  float(price_including_tax)
+    ws[f'E{book_key}'] = extract_float(html.find("th", string="Price (incl. tax)").findNext('td').get_text())
 
     # universal_product_code
-    availability = html.find("th", string="Availability").findNext('td').get_text()
-    availability = preg_int(availability)
-    ws[f'F{book_key}'] = int(availability)
+    ws[f'F{book_key}'] = extract_int(html.find("th", string="Availability").findNext('td').get_text())
 
     # image_url
     image_url = html.find('img').attrs['src'].replace('../..', 'https://books.toscrape.com')
@@ -55,23 +51,12 @@ def get_book_infos(url, book_key) :
 
     # rating 
     rating = html.find('p', class_="star-rating").attrs['class'][1]
-    match rating:
-        case "Zero":
-            rating = 0
-        case "One":
-            rating = 1
-        case "Two":
-            rating = 2
-        case "Three":
-            rating = 3
-        case "Four":
-            rating = 4
-        case "Five":
-            rating = 5
 
-    ws[f'I{book_key}'] = rating
+    # Conversion de la notation en étoiles en entier
+    rating_dict = {"Zero": 0, "One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}
+    ws[f'I{book_key}'] = rating_dict.get(rating)
 
-    print(f'{title} téléchargé avec succès')
+    print(f'"{title}" téléchargé avec succès')
 
 workbook = openpyxl.Workbook()
 domain_name = "https://books.toscrape.com/"
@@ -94,18 +79,18 @@ col_index = {
 website = requests.get(url_website)
 html_main = BeautifulSoup(website.content, 'html.parser')
 
-key_category = 1
+key_category = 0
 
 for category in html_main.find('ul', class_="nav-list").find('li').find_all('li') :
 
     # Permet de ne capter que quelques catégories pour que ce ne soit pas trop long
     # key_category += 1
-    # if key_category >= 5 :
+    # if key_category >= 2 :
     #     break
 
     category_name = category.get_text().strip()
     print('')
-    print(category_name)
+    print(f'Passage à la catégorie "{category_name}"')
 
     category_url = domain_name+(category.find('a').attrs['href'])
     ws = workbook.create_sheet(category_name)
@@ -134,7 +119,6 @@ for category in html_main.find('ul', class_="nav-list").find('li').find_all('li'
         else :
             next_page_exists = False
             print('')
-            print('Passage à la catégorie suivante...')
 
 workbook.save('../data/books.xlsx')
-print('Passage à la catégorie suivante...')
+print('Fichier enregistré avec succès.')
